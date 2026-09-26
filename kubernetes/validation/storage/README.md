@@ -10,7 +10,9 @@ The validation script performs these checks:
 - pins two RWX pods to different Ready nodes labeled `workload=cvat`;
 - verifies bidirectional cross-node reads and writes, UID/GID 1000, projected mode 0755,
   and persistence after recreating an RWX pod;
-- verifies an RWO marker survives pod deletion, disk reattachment, and pod recreation;
+- verifies RWO provisioning and successful attachment, then proves that marker data
+  survives pod deletion and recreation by remounting and reusing the existing PVC on the
+  same pinned application node;
 - records PVC, PV, CSI handle, and Azure backing-resource information in the ignored
   `artifacts/storage-validation-state.json` cleanup ledger.
 
@@ -34,3 +36,7 @@ the captured share account, and contains no remaining shares.
 The cleanup retains `cvat-rwx` and `cvat-rwo` because they are platform StorageClasses for
 the later CVAT deployment. It must finish successfully before the storage validation is
 considered complete.
+
+This validation does not test cross-node Azure Disk detach/reattach. The recreated RWO pod
+is intentionally pinned to the same application node; cross-node behavior is deferred
+unless a later availability requirement makes it relevant.

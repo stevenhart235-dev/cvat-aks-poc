@@ -1,7 +1,10 @@
 # Milestone 3: CVAT CPU platform baseline
 
-Milestone 3 will add the smallest useful application platform for deploying and measuring
-CVAT. It is a functional and measurement baseline, not a production sizing exercise.
+Milestone 3 established and proved the smallest useful application platform for a later
+CVAT deployment and measurement exercise. It is a functional baseline, not a production
+sizing exercise. The platform was validated and then destroyed cleanly; this document
+preserves the design rationale, implemented configuration, and measured results needed to
+recreate it.
 
 ## Application requirements carried forward
 
@@ -13,11 +16,12 @@ CVAT. It is a functional and measurement baseline, not a production sizing exerc
 - Import, chunk-generation, and export workloads require enough headroom to produce useful
   measurements instead of beginning from a CPU-saturated baseline.
 
-Production dataset capacity and retention requirements are unknown. Milestone 3 will test
-representative local and, later, cloud-backed datasets without assuming a production data
-volume or designing long-term dataset storage.
+Production dataset capacity and retention requirements remain unknown. Milestone 3 did not
+assume a production data volume or design long-term dataset storage. Representative CVAT
+dataset workflows and cloud-backed datasets are intentionally deferred to application
+deployment work.
 
-## Accepted platform baseline
+## Planned design and rationale
 
 - A fixed two-node user pool using `Standard_D4as_v7`.
 - Node label `workload=cvat` and taint `workload=cvat:NoSchedule`.
@@ -34,7 +38,7 @@ pod rescheduling and cross-node storage access are. Terraform explicitly records
 default `max_surge = "10%"` for the application pool to avoid provider/default drift; this
 does not make surge upgrades viable while quota usage remains ten of ten vCPUs.
 
-## Analytics comparison
+## Intentionally deferred application measurements
 
 Analytics is an optional CVAT application capability to measure rather than a permanent
 platform assumption:
@@ -44,11 +48,12 @@ platform assumption:
 3. Record the difference in pod count, requested and observed CPU and memory, persistent
    storage, and application behavior.
 
-## Implementation boundary
+## Implemented configuration boundary
 
-This platform step creates the application node pool and enables the required CSI drivers.
-The StorageClass manifests define the storage interfaces CVAT will consume later. It does
-not deploy CVAT, create its PVCs, or choose a production storage and retention architecture.
+This platform step created the application node pool and enabled the required CSI drivers.
+The StorageClass manifests define the storage interfaces CVAT can consume later. Milestone
+3 did not deploy CVAT, create application PVCs, or choose a production storage and
+retention architecture.
 
 ## Proven platform status
 
