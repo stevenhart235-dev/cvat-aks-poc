@@ -1,0 +1,24 @@
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "eastus2"
+name_prefix     = "cvat-poc"
+
+# Optional. Leave unset to let Azure select a supported Kubernetes version.
+# kubernetes_version = "1.32"
+
+system_node_vm_size = "Standard_D2as_v7"
+system_node_count   = 1
+
+vnet_cidr       = "10.20.0.0/16"
+aks_subnet_cidr = "10.20.0.0/22"
+pod_cidr        = "10.244.0.0/16"
+service_cidr    = "10.2.0.0/16"
+dns_service_ip  = "10.2.0.10"
+
+# Optional. When supplied, Terraform will not create or manage a VNet/subnet.
+# The deployment identity must be able to read the VNet and create the AKS
+# managed identity's Network Contributor role assignment on this subnet.
+# external_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-poc/subnets/snet-aks"
+
+tags = {
+  Environment = "poc"
+}
