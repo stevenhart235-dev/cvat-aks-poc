@@ -8,6 +8,9 @@ name_prefix     = "cvat-poc"
 system_node_vm_size = "Standard_D2as_v7"
 system_node_count   = 1
 
+application_node_vm_size = "Standard_D4as_v7"
+application_node_count   = 2
+
 vnet_cidr       = "10.20.0.0/16"
 aks_subnet_cidr = "10.20.0.0/22"
 pod_cidr        = "10.244.0.0/16"

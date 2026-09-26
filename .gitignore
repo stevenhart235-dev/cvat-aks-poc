@@ -15,6 +15,7 @@ crash.log
 # Environment
 .env
 .env.*
+/artifacts/
 
 # IDE
 .vscode/

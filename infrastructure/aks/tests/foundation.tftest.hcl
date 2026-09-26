@@ -78,8 +78,33 @@ run "aks_baseline" {
   }
 
   assert {
-    condition     = azurerm_kubernetes_cluster.this.storage_profile[0].disk_driver_enabled
-    error_message = "Azure Disk CSI must be enabled."
+    condition     = azurerm_kubernetes_cluster.this.storage_profile[0].disk_driver_enabled && azurerm_kubernetes_cluster.this.storage_profile[0].file_driver_enabled
+    error_message = "Azure Disk and Azure File CSI must be enabled."
+  }
+
+  assert {
+    condition     = azurerm_kubernetes_cluster_node_pool.cvat.name == "cvat" && azurerm_kubernetes_cluster_node_pool.cvat.mode == "User"
+    error_message = "CVAT must use a dedicated user node pool."
+  }
+
+  assert {
+    condition     = azurerm_kubernetes_cluster_node_pool.cvat.vm_size == "Standard_D4as_v7" && azurerm_kubernetes_cluster_node_pool.cvat.node_count == 2 && !azurerm_kubernetes_cluster_node_pool.cvat.auto_scaling_enabled
+    error_message = "The Milestone 3 CVAT pool must use two fixed Standard_D4as_v7 nodes."
+  }
+
+  assert {
+    condition     = azurerm_kubernetes_cluster_node_pool.cvat.node_labels["workload"] == "cvat" && contains(azurerm_kubernetes_cluster_node_pool.cvat.node_taints, "workload=cvat:NoSchedule")
+    error_message = "The CVAT pool must carry its workload label and NoSchedule taint."
+  }
+
+  assert {
+    condition     = azurerm_kubernetes_cluster_node_pool.cvat.upgrade_settings[0].max_surge == "10%"
+    error_message = "The CVAT pool must explicitly model Azure's 10% default surge setting."
+  }
+
+  assert {
+    condition     = azurerm_kubernetes_cluster_node_pool.cvat.vnet_subnet_id == local.effective_subnet_id
+    error_message = "The CVAT pool must use the effective AKS subnet."
   }
 }
 

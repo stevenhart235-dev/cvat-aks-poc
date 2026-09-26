@@ -13,6 +13,11 @@ output "node_resource_group_name" {
   value       = azurerm_kubernetes_cluster.this.node_resource_group
 }
 
+output "application_node_pool_name" {
+  description = "Name of the user node pool reserved for CVAT workloads."
+  value       = azurerm_kubernetes_cluster_node_pool.cvat.name
+}
+
 output "location" {
   description = "Azure region containing the AKS cluster."
   value       = azurerm_kubernetes_cluster.this.location

@@ -54,6 +54,23 @@ variable "system_node_count" {
   }
 }
 
+variable "application_node_vm_size" {
+  description = "VM size for the fixed CVAT application node pool."
+  type        = string
+  default     = "Standard_D4as_v7"
+}
+
+variable "application_node_count" {
+  description = "Fixed node count for the CVAT application node pool."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.application_node_count >= 1 && floor(var.application_node_count) == var.application_node_count
+    error_message = "application_node_count must be a positive whole number."
+  }
+}
+
 variable "vnet_cidr" {
   description = "Address space for the standalone POC VNet."
   type        = string

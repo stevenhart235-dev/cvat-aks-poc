@@ -123,7 +123,7 @@ resource "azurerm_kubernetes_cluster" "this" {
 
   storage_profile {
     disk_driver_enabled         = true
-    file_driver_enabled         = false
+    file_driver_enabled         = true
     blob_driver_enabled         = false
     snapshot_controller_enabled = true
   }
@@ -131,4 +131,31 @@ resource "azurerm_kubernetes_cluster" "this" {
   tags = local.tags
 
   depends_on = [azurerm_role_assignment.aks_subnet_network_contributor]
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "cvat" {
+  name                  = "cvat"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = var.application_node_vm_size
+  node_count            = var.application_node_count
+  auto_scaling_enabled  = false
+  mode                  = "User"
+  os_sku                = "Ubuntu"
+  os_disk_type          = "Managed"
+  os_disk_size_gb       = 64
+  vnet_subnet_id        = local.effective_subnet_id
+
+  node_labels = {
+    workload = "cvat"
+  }
+
+  node_taints = [
+    "workload=cvat:NoSchedule",
+  ]
+
+  upgrade_settings {
+    max_surge = "10%"
+  }
+
+  tags = local.tags
 }

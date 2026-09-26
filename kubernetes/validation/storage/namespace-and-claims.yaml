@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cvat-storage-validation
+  labels:
+    app.kubernetes.io/part-of: cvat-storage-validation
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rwx-test
+  namespace: cvat-storage-validation
+  labels:
+    app.kubernetes.io/part-of: cvat-storage-validation
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: cvat-rwx
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rwo-test
+  namespace: cvat-storage-validation
+  labels:
+    app.kubernetes.io/part-of: cvat-storage-validation
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: cvat-rwo
+  resources:
+    requests:
+      storage: 1Gi
