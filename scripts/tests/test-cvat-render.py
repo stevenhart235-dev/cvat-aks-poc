@@ -22,7 +22,7 @@ def memory_mi(value):
 
 expected_counts = {
     "NetworkPolicy": 1, "PodDisruptionBudget": 1, "ServiceAccount": 5,
-    "Secret": 5, "ConfigMap": 9, "PersistentVolumeClaim": 1,
+    "Secret": 6, "ConfigMap": 9, "PersistentVolumeClaim": 1,
     "ClusterRole": 1, "ClusterRoleBinding": 1, "Role": 1, "RoleBinding": 1,
     "Service": 13, "Deployment": 12, "StatefulSet": 5, "Job": 1, "Pod": 1,
 }
@@ -65,6 +65,36 @@ assert "cvat/server:v2.76.0" in images and "cvat/ui:v2.76.0" in images
 assert not any("traefik" in image.lower() or "nuclio" in image.lower() for image in images)
 assert not any(document["kind"] == "Ingress" for document in documents)
 
+django_workloads = {
+    "cvat-backend-initializer-r1",
+    "cvat-backend-server",
+    "cvat-backend-worker-annotation",
+    "cvat-backend-worker-chunks",
+    "cvat-backend-worker-consensus",
+    "cvat-backend-worker-export",
+    "cvat-backend-worker-import",
+    "cvat-backend-worker-qualityreports",
+    "cvat-backend-worker-utils",
+    "cvat-backend-worker-webhooks",
+}
+seen_django_workloads = set()
+for document in documents:
+    if document["kind"] not in ("Deployment", "Job"):
+        continue
+    name = document["metadata"]["name"]
+    normalized_name = "cvat-backend-initializer-r1" if name.startswith("cvat-backend-initializer-r") else name
+    if normalized_name not in django_workloads:
+        continue
+    containers = document["spec"]["template"]["spec"]["containers"]
+    backend = next(container for container in containers if container["name"] == "cvat-backend")
+    matching = [item for item in backend.get("env", []) if item.get("name") == "DJANGO_SECRET_KEY"]
+    assert matching == [{
+        "name": "DJANGO_SECRET_KEY",
+        "valueFrom": {"secretKeyRef": {"name": "cvat-django-secret", "key": "django-secret-key"}},
+    }], f"incorrect Django key reference: {name}"
+    seen_django_workloads.add(normalized_name)
+assert seen_django_workloads == django_workloads, seen_django_workloads
+
 claims = [document for document in documents if document["kind"] == "PersistentVolumeClaim"]
 assert len(claims) == 1 and claims[0]["spec"]["storageClassName"] == "cvat-rwx"
 stateful = {document["metadata"]["name"]: document for document in documents if document["kind"] == "StatefulSet"}
@@ -81,26 +111,36 @@ expected_schema = {
     "cvat-redis-secret": ["password"], "cvat-kvrocks-secret": ["password"],
     "cvat-analytics-secret": ["CLICKHOUSE_DB", "CLICKHOUSE_HOST", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_PORT", "CLICKHOUSE_USER"],
     "cvat-grafana": ["admin-password", "admin-user", "ldap-toml"],
+    "cvat-django-secret": ["django-secret-key"],
 }
 assert schema == expected_schema, schema
+assert next(secret for secret in secrets if secret["metadata"]['name'] == 'cvat-django-secret')["metadata"].get("namespace") == "cvat"
 released_defaults = {"cvat_postgresql", "cvat_postgresql_postgres", "cvat_postgresql_replica", "cvat_redis", "cvat_kvrocks", "user"}
 sensitive_keys = {
     "cvat-postgres-secret": {"password", "postgres-password", "replication-password"},
     "cvat-redis-secret": {"password"}, "cvat-kvrocks-secret": {"password"},
     "cvat-analytics-secret": {"CLICKHOUSE_PASSWORD"}, "cvat-grafana": {"admin-password"},
+    "cvat-django-secret": {"django-secret-key"},
 }
+secret_values = []
 for secret in secrets:
     secret_name = secret["metadata"]["name"]
     for key, encoded in (secret.get("data") or {}).items():
         if key not in sensitive_keys[secret_name]:
             continue
         try:
-            assert base64.b64decode(encoded).decode() not in released_defaults
+            decoded = base64.b64decode(encoded).decode()
+            assert decoded not in released_defaults
+            secret_values.append(decoded)
         except UnicodeDecodeError:
             pass
     for key, value in (secret.get("stringData") or {}).items():
         if key in sensitive_keys[secret_name]:
             assert value not in released_defaults
+            secret_values.append(value)
 
-print("PASS: M4b topology, scheduling, storage, resources, images, exclusions, and secret schema")
+assert len(secret_values) == 8, "the local schema must supply exactly eight sensitive values"
+assert len(set(secret_values)) == 8, "all eight local secret values must be independent"
+
+print("PASS: M4b topology, scheduling, storage, resources, images, exclusions, Django reference, and eight-value secret schema")
 print(f"steady requests: {cpu}m CPU / {int(memory)}Mi; initializer peak: {cpu + 100}m / {int(memory + 256)}Mi")

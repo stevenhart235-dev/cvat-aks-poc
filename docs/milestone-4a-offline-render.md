@@ -311,8 +311,9 @@ analytics-disabled comparison remains a measurement experiment, not a baseline c
 
 Use an ignored Helm values file at
 `helm/cvat/values-m4b-secrets.local.yaml`. Copy the committed
-`values-m4b-secrets.example.yaml`, replace every placeholder with independently generated
-random values, keep filesystem access limited to the operator, and pass the local file to
+`values-m4b-secrets.example.yaml`, or run `scripts/New-CvatM4bSecrets.ps1` to generate eight
+independent values containing 256 bits of cryptographic randomness each. Keep filesystem
+access limited to the operator and pass the local file to
 Helm after the non-secret POC values file. Passing it last ensures only the intended secret
 fields are overridden:
 
@@ -339,6 +340,7 @@ that is accepted for this short-lived POC and is not the production secret archi
 | KVrocks password | Locally generated and supplied | `cvat-kvrocks-secret/password` | KVrocks and backend on-disk Redis clients |
 | ClickHouse password | Locally generated and supplied | `cvat-analytics-secret/CLICKHOUSE_PASSWORD` | ClickHouse, Vector/Grafana/backend analytics |
 | Grafana administrator password | Locally generated and supplied to replace chart randomness | `cvat-grafana/admin-password` | Grafana bootstrap, although anonymous access is configured |
+| Django signing key | Locally generated and supplied | `cvat-django-secret/django-secret-key` | Initializer, backend server, and every CVAT Django worker |
 
 The chart also places non-secret connection metadata in those Secrets: PostgreSQL
 `database`/`username`, ClickHouse database/user/host/port, and Grafana `admin-user`. Their
@@ -347,10 +349,20 @@ generate a random password if none were supplied; supplying it locally makes the
 repeatable. PostgreSQL, Redis, KVrocks, and analytics Secret objects are chart-generated
 from the local values above.
 
-CVAT's Django key is application-generated and persisted under the shared backend volume;
-it is not a separately rendered Kubernetes Secret. The initial CVAT user password is also
-not a Helm value and must be entered interactively when the user is created. Neither value
-belongs in Git or the local Helm values file.
+The released chart has no top-level arbitrary-object hook or dedicated Django Secret value.
+For M4b, the ignored overlay uses the packaged PostgreSQL dependency's supported
+`extraDeploy` hook to render `cvat-django-secret`; tracked values reference its
+`django-secret-key` through global `cvat.backend.additionalEnv`. This keeps the approved
+chart artifact unchanged and propagates one stable key to the initializer, server, and all
+worker types. The real value remains only in the ignored local overlay and Helm's in-cluster
+release data. The initial CVAT user password is not a Helm value and must be entered
+interactively when the user is created.
+
+PostgreSQL does not logically own the Django signing key. Its `extraDeploy` hook is only
+the packaging mechanism available in the exact chart `2.76.0` artifact for materializing
+an additional release-scoped object without forking the chart. A production design should
+revisit how the Kubernetes Secret is materialized and rotated independently of the
+application-level `DJANGO_SECRET_KEY` pattern, which remains the supported CVAT input.
 
 ## External dependencies
 
@@ -360,9 +372,9 @@ belongs in Git or the local Helm values file.
 - Outbound registry access to Docker Hub and public ECR for the rendered images.
 - Dynamic provisioning through installed `cvat-rwx` and `cvat-rwo` StorageClasses.
 - Secure values or pre-created Secrets for PostgreSQL, Redis, KVrocks, ClickHouse
-  analytics, and Grafana. Released sample passwords are not acceptable deployment
-  credentials. CVAT key material is persisted through the backend data volume rather than
-  a separately rendered Kubernetes Secret and must be verified during M4b.
+  analytics, Grafana, and the Django signing key. Released sample passwords are not
+  acceptable deployment credentials. Every CVAT Django process references the same
+  `cvat-django-secret/django-secret-key` value during M4b.
 - Initial access uses approved `kubectl port-forward`; plain defaults expose no
   LoadBalancer or Ingress.
 
@@ -442,6 +454,35 @@ confirmed. M4a adds or corrects these points:
 6. The released OCI artifact supplies an exact dependency lock even though the tagged
    GitHub source tree does not retain `Chart.lock`.
 7. The Grafana dependency creates cluster-scoped RBAC and a Helm test hook Pod.
+
+## Phase 3 live failure and selected remediation
+
+The first M4b installation did not converge. The Azure Files CSI backend claim bound and
+mounted successfully as RWX, and the permission-fix containers established ownership
+`1000:1000` and mode `0755`. CVAT v2.76.0 nevertheless failed while creating
+`/home/django/keys/secret_key.py`: `generate_secret_key()` creates a temporary file and
+uses `os.link()` to publish the winning key atomically, while the live Azure Files SMB mount
+returned `Errno 95: Operation not supported` for that hard link. The backend server and
+workers using the keys subpath restarted, and OPA failed downstream because the backend
+bundle was unavailable.
+
+This is the same AKS failure recorded in upstream [CVAT issue #8002](https://github.com/cvat-ai/cvat/issues/8002).
+CVAT v2.76.0 reads `DJANGO_SECRET_KEY` before attempting file loading or generation, and a
+CVAT maintainer explicitly recommends supplying that environment variable to backend and
+worker pods when volume-based generation fails in [issue #9652](https://github.com/cvat-ai/cvat/issues/9652#issuecomment-3113329446).
+M4b therefore supplies one stable key from `cvat-django-secret` to all Django processes
+through the chart-supported global `cvat.backend.additionalEnv` list. No chart fork,
+additional PVC, StorageClass change, or application-source change is required.
+
+Azure Files SMB remains the candidate bulk shared-data implementation because the observed
+failure is confined to the hard-link-based key publication under `/home/django/keys`.
+That does **not** prove SMB suitable for the remaining CVAT paths. Later M4b functional
+validation must exercise task/media upload and access, import, chunk generation, export,
+cache behavior, and `/home/django/data/tmp` behavior across the relevant pods and nodes.
+
+**Refined application requirement:** RWX access mode alone is insufficient to describe CVAT
+storage compatibility; required filesystem semantics must be evaluated per application
+path.
 
 ## Proposed M4b success criteria
 

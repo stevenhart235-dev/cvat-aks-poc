@@ -24,6 +24,12 @@ cvat:
   backend:
     affinity: *cvatNodeAffinity
     tolerations: *cvatTolerations
+    additionalEnv:
+      - name: DJANGO_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: cvat-django-secret
+            key: django-secret-key
     defaultStorage:
       storageClassName: cvat-rwx
       accessModes:
