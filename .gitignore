@@ -8,6 +8,8 @@ crash.log
 # Local configuration
 *.tfvars
 !*.tfvars.example
+/helm/cvat/*.local.yaml
+/artifacts/cvat-cleanup-*.json
 
 # Kubernetes
 *.kubeconfig

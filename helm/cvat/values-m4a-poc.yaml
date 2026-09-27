@@ -1,0 +1,157 @@
+# Milestone 4b POC platform integration and measurement guardrails.
+# These requests and memory limits are measurement baselines, not production sizing.
+
+x-cvat-node-affinity: &cvatNodeAffinity
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: workload
+              operator: In
+              values:
+                - cvat
+
+x-cvat-tolerations: &cvatTolerations
+  - key: workload
+    operator: Equal
+    value: cvat
+    effect: NoSchedule
+
+x-cvat-node-selector: &cvatNodeSelector
+  workload: cvat
+
+cvat:
+  backend:
+    affinity: *cvatNodeAffinity
+    tolerations: *cvatTolerations
+    defaultStorage:
+      storageClassName: cvat-rwx
+      accessModes:
+        - ReadWriteMany
+    initializer:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 2Gi
+    server:
+      resources:
+        requests:
+          # The released template exposes resources only for cvat-backend, not
+          # its nginx sidecar. Keep the approved server-pod request aggregate.
+          cpu: 400m
+          memory: 768Mi
+        limits:
+          memory: 4Gi
+    worker:
+      annotation: &cvatWorkerResources
+        resources:
+          requests:
+            cpu: 150m
+            memory: 256Mi
+          limits:
+            memory: 4Gi
+      chunks: *cvatWorkerResources
+      consensus: *cvatWorkerResources
+      export: *cvatWorkerResources
+      import: *cvatWorkerResources
+      qualityreports: *cvatWorkerResources
+      utils: *cvatWorkerResources
+      webhooks: *cvatWorkerResources
+  frontend:
+    affinity: *cvatNodeAffinity
+    tolerations: *cvatTolerations
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  opa:
+    affinity: *cvatNodeAffinity
+    tolerations: *cvatTolerations
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  kvrocks:
+    affinity: *cvatNodeAffinity
+    tolerations: *cvatTolerations
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 2Gi
+    defaultStorage:
+      storageClassName: cvat-rwo
+      accessModes:
+        - ReadWriteOnce
+
+postgresql:
+  primary:
+    nodeSelector: *cvatNodeSelector
+    tolerations: *cvatTolerations
+    persistence:
+      storageClass: cvat-rwo
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        memory: 2Gi
+
+redis:
+  master:
+    nodeSelector: *cvatNodeSelector
+    tolerations: *cvatTolerations
+    persistence:
+      storageClass: cvat-rwo
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 50Mi
+      limits:
+        cpu: 150m
+        memory: 512Mi
+        ephemeral-storage: 2Gi
+
+clickhouse:
+  nodeSelector: *cvatNodeSelector
+  tolerations: *cvatTolerations
+  persistence:
+    storageClass: cvat-rwo
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 4Gi
+
+vector:
+  nodeSelector: *cvatNodeSelector
+  tolerations: *cvatTolerations
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+grafana:
+  nodeSelector: *cvatNodeSelector
+  tolerations: *cvatTolerations
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
