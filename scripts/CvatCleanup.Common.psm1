@@ -46,4 +46,43 @@ function Assert-CvatCleanupLedger {
     Assert-CvatStorageInventory -Claims $Ledger.claims -Namespace $Ledger.namespace
 }
 
-Export-ModuleMember -Function Get-CvatExpectedClaims, Assert-CvatStorageInventory, Assert-CvatCleanupLedger
+function Assert-NoCvatClaimMounts {
+    param(
+        [Parameter(Mandatory)]$Pods,
+        [Parameter(Mandatory)][string]$Namespace,
+        [Parameter(Mandatory)][string[]]$ClaimNames
+    )
+
+    foreach ($pod in @($Pods)) {
+        if ($null -eq $pod -or $null -eq $pod.PSObject.Properties['metadata'] -or
+            $null -eq $pod.metadata -or [string]::IsNullOrWhiteSpace($pod.metadata.name) -or
+            [string]::IsNullOrWhiteSpace($pod.metadata.namespace) -or
+            $null -eq $pod.PSObject.Properties['spec'] -or $null -eq $pod.spec) {
+            throw 'Malformed pod data prevents a safe PVC mount evaluation.'
+        }
+        if ($null -eq $pod.spec.PSObject.Properties['volumes'] -or $null -eq $pod.spec.volumes) { continue }
+
+        foreach ($volume in @($pod.spec.volumes)) {
+            if ($null -eq $volume -or [string]::IsNullOrWhiteSpace($volume.name)) {
+                throw "Malformed volume data on pod $($pod.metadata.namespace)/$($pod.metadata.name)."
+            }
+            $sourceProperties = @($volume.PSObject.Properties | Where-Object Name -ne 'name')
+            if ($sourceProperties.Count -eq 0) {
+                throw "Volume $($volume.name) on pod $($pod.metadata.namespace)/$($pod.metadata.name) has no identifiable volume source."
+            }
+
+            $pvcProperty = $volume.PSObject.Properties['persistentVolumeClaim']
+            if ($null -eq $pvcProperty) { continue }
+            if ($null -eq $pvcProperty.Value -or
+                $null -eq $pvcProperty.Value.PSObject.Properties['claimName'] -or
+                [string]::IsNullOrWhiteSpace($pvcProperty.Value.claimName)) {
+                throw "Volume $($volume.name) on pod $($pod.metadata.namespace)/$($pod.metadata.name) has a malformed persistentVolumeClaim source."
+            }
+            if ($pod.metadata.namespace -eq $Namespace -and $pvcProperty.Value.claimName -in $ClaimNames) {
+                throw "Pod $($pod.metadata.name) still consumes a captured claim."
+            }
+        }
+    }
+}
+
+Export-ModuleMember -Function Get-CvatExpectedClaims, Assert-CvatStorageInventory, Assert-CvatCleanupLedger, Assert-NoCvatClaimMounts

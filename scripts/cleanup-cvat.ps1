@@ -65,11 +65,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Helm uninstall failed.' }
 
     $pods = kubectl get pods -A -o json | ConvertFrom-Json -Depth 100
-    foreach ($pod in $pods.items) {
-        foreach ($volume in @($pod.spec.volumes | Where-Object { $null -ne $_.persistentVolumeClaim })) {
-            if ($pod.metadata.namespace -eq $ledger.namespace -and $volume.persistentVolumeClaim.claimName -in @($ledger.claims.pvc)) { throw "Pod $($pod.metadata.name) still consumes a captured claim." }
-        }
-    }
+    Assert-NoCvatClaimMounts -Pods $pods.items -Namespace $ledger.namespace -ClaimNames @($ledger.claims.pvc)
     $liveClaims = @(Get-LiveClaims); Assert-CvatStorageInventory $liveClaims $ledger.namespace
     foreach ($claim in $liveClaims) {
         kubectl patch pv $claim.pv --type merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}'

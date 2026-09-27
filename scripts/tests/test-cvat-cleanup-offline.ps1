@@ -27,4 +27,29 @@ $wrongRef = @($claims | ForEach-Object { $_.PSObject.Copy() }); $wrongRef[1].cla
 $wrongClass = @($claims | ForEach-Object { $_.PSObject.Copy() }); $wrongClass[2].storageClass = 'default'; Assert-Throws { Assert-CvatStorageInventory $wrongClass $namespace } 'wrong class'
 $duplicate = @($claims | ForEach-Object { $_.PSObject.Copy() }); $duplicate[4].volumeHandle = $duplicate[3].volumeHandle; Assert-Throws { Assert-CvatStorageInventory $duplicate $namespace } 'duplicate CSI identity'
 $unsafe = $ledger.PSObject.Copy(); $unsafe.namespace = 'default'; Assert-Throws { Assert-CvatCleanupLedger $unsafe } 'unsafe namespace'
-Write-Host 'PASS: valid ledger accepted and six ambiguity/scope/refusal cases rejected.'
+
+function New-TestPod($Name, $Volumes) {
+    [pscustomobject]@{
+        metadata = [pscustomobject]@{ name = $Name; namespace = $namespace }
+        spec = [pscustomobject]@{ volumes = $Volumes }
+    }
+}
+
+$ledgeredPvc = [pscustomobject]@{ name='ledgered'; persistentVolumeClaim=[pscustomobject]@{ claimName='cvat-backend-data' } }
+$otherPvc = [pscustomobject]@{ name='other'; persistentVolumeClaim=[pscustomobject]@{ claimName='unrelated-claim' } }
+$configMap = [pscustomobject]@{ name='config'; configMap=[pscustomobject]@{ name='config' } }
+$secret = [pscustomobject]@{ name='secret'; secret=[pscustomobject]@{ secretName='secret' } }
+$emptyDir = [pscustomobject]@{ name='scratch'; emptyDir=[pscustomobject]@{} }
+$projected = [pscustomobject]@{ name='service-account'; projected=[pscustomobject]@{ sources=@() } }
+$malformedPvc = [pscustomobject]@{ name='malformed-pvc'; persistentVolumeClaim=[pscustomobject]@{} }
+$missingSource = [pscustomobject]@{ name='missing-source' }
+$claimNames = @($claims.pvc)
+
+Assert-Throws { Assert-NoCvatClaimMounts -Pods @(New-TestPod 'ledgered-pvc' @($ledgeredPvc)) -Namespace $namespace -ClaimNames $claimNames } 'ledgered PVC mount'
+Assert-NoCvatClaimMounts -Pods @(New-TestPod 'other-pvc' @($otherPvc)) -Namespace $namespace -ClaimNames $claimNames
+Assert-NoCvatClaimMounts -Pods @(New-TestPod 'non-pvc' @($configMap,$secret,$emptyDir,$projected)) -Namespace $namespace -ClaimNames $claimNames
+Assert-Throws { Assert-NoCvatClaimMounts -Pods @(New-TestPod 'mixed' @($configMap,$ledgeredPvc,$emptyDir)) -Namespace $namespace -ClaimNames $claimNames } 'ledgered PVC in mixed volumes'
+Assert-NoCvatClaimMounts -Pods @(New-TestPod 'missing-pvc-property' @($configMap)) -Namespace $namespace -ClaimNames $claimNames
+Assert-Throws { Assert-NoCvatClaimMounts -Pods @(New-TestPod 'malformed-pvc' @($malformedPvc)) -Namespace $namespace -ClaimNames $claimNames } 'malformed PVC source'
+Assert-Throws { Assert-NoCvatClaimMounts -Pods @(New-TestPod 'missing-volume-source' @($missingSource)) -Namespace $namespace -ClaimNames $claimNames } 'missing volume source'
+Write-Host 'PASS: cleanup ledger refusals and strict-mode pod-volume mount safety checks passed.'
