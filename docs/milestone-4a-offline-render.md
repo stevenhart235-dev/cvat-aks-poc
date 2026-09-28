@@ -484,6 +484,25 @@ cache behavior, and `/home/django/data/tmp` behavior across the relevant pods an
 storage compatibility; required filesystem semantics must be evaluated per application
 path.
 
+## M4b recreation and local-access result
+
+On 2026-09-28, the POC was recreated from zero Terraform state with the stable
+`DJANGO_SECRET_KEY` remediation already included. This fresh CVAT `2.76.0` installation
+deployed successfully on its first Helm attempt. The initializer completed and all 20
+intended long-running pods became Ready. No Django hard-link failure recurred.
+
+The workstation-local reverse proxy combined the frontend and backend ClusterIP service
+port-forwards on `http://127.0.0.1:8081/`. It served the UI from `/` and correctly routed
+the schema, health, about, login, and session API paths to backend JSON responses instead
+of the frontend `index.html`. Interactive login as the local superuser `steven` succeeded.
+No Ingress, Traefik, or public application endpoint was introduced.
+
+This session did not successfully create a project or task, ingest sample media, perform
+annotation, generate representative chunks, or export results. The next functional test
+is to create a task with representative sample media, allow CVAT to process it, annotate
+it, and export the resulting annotations. That workflow remains necessary before Azure
+Files SMB can be evaluated for CVAT's bulk-data paths.
+
 ## Proposed M4b success criteria
 
 Before considering a live deployment successful:
