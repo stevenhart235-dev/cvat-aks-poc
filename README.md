@@ -127,6 +127,10 @@ the measured evidence.
    terraform -chdir=infrastructure/aks plan -detailed-exitcode
    ```
 
+For a deployed CVAT release without Ingress or Traefik, use the workstation-only
+same-origin procedure in [docs/local-cvat-access.md](docs/local-cvat-access.md). Directly
+forwarding only `cvat-frontend-service` does not expose the backend API.
+
 ### Tear down
 
 When the POC session is finished, review the complete destroy scope before approving it:
